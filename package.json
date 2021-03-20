@@ -37,7 +37,7 @@
   "scripts": {
     "build": "rimraf dist && tsc",
     "prepack": "npm run build",
-    "size": "size-limit",
+    "size": "npm run build && size-limit",
     "test": "npm run size",
     "lint": "echo 'please setup linting'"
   },
