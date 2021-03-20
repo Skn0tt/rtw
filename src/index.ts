@@ -120,7 +120,7 @@ export function useState<T>(_initial: T): [T, (v: T) => void] {
 
 export function makeInput<T, Arguments extends any[]>(
   connect: (send: (v: T) => void) => (...args: Arguments) => void
-): () => T {
+): (...args: Arguments) => T {
   let lastValue: T | null = null;
   let hasValue = false;
   let resolve: (() => void) | null = null;
