@@ -51,6 +51,13 @@ function makeStream<Result>(
 
 let currentlyEvaluatingStream: Stream<any> | null = null;
 
+function withStream(stream: Stream<any>, doIt: () => void) {
+  const oldEvaluatingStream = currentlyEvaluatingStream;
+  currentlyEvaluatingStream = stream;
+  doIt()
+  currentlyEvaluatingStream = oldEvaluatingStream;
+}
+
 export function makeTemplate<Arguments extends any[], Result>(
   derive: (...args: Arguments) => Result,
   name: string
@@ -59,10 +66,9 @@ export function makeTemplate<Arguments extends any[], Result>(
     let stream = getStream<Result>(derive, args);
     if (!stream) {
       stream = makeStream(derive, args, name, () => {
-        const oldEvaluatingStream = currentlyEvaluatingStream;
-        currentlyEvaluatingStream = stream!;
-        stream!.lastValue = derive(...args);
-        currentlyEvaluatingStream = oldEvaluatingStream;
+        withStream(stream!, () => {
+          stream!.lastValue = derive(...args);
+        })
 
         stream!.dependents.forEach(dependent => dependent.notify());
       });
@@ -86,19 +92,17 @@ export function makeTemplate<Arguments extends any[], Result>(
     let stream = getStream<Result>(derive, args);
     if (!stream) {
       stream = makeStream(derive, args, name, () => {
-        const lastEvaluatingStream = currentlyEvaluatingStream;
-        currentlyEvaluatingStream = stream!;
-        stream!.lastValue = derive(...args);
-        currentlyEvaluatingStream = lastEvaluatingStream;
+        withStream(stream!, () => {
+          stream!.lastValue = derive(...args);
+        })
         onValue(stream!.lastValue);
       });
     }
 
     try {
-      const lastEvaluatingStream = currentlyEvaluatingStream;
-      currentlyEvaluatingStream = stream;
-      stream.lastValue = derive(...args);
-      currentlyEvaluatingStream = lastEvaluatingStream;
+      withStream(stream!, () => {
+        stream!.lastValue = derive(...args);
+      })
       onValue(stream.lastValue);
     } catch (error) {
       if (!error.then) {
