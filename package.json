@@ -38,7 +38,8 @@
     "build": "rimraf dist && tsc",
     "prepack": "npm run build",
     "size": "size-limit",
-    "test": "npm run size"
+    "test": "npm run size",
+    "lint": "echo 'please setup linting'"
   },
   "devDependencies": {
     "@size-limit/preset-small-lib": "^4.10.1",
