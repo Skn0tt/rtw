@@ -9,9 +9,12 @@ test("Only the most current value is passed down", () => {
     }
   );
 
-  const double = makeDerivedValue((startFrom: number) => {
-    return input(startFrom) * 2;
-  }, "double");
+  const double = makeDerivedValue(
+    (startFrom: number) => () => {
+      return input(startFrom) * 2;
+    },
+    "double"
+  );
 
   const result: number[] = [];
   double.subscribe([3], (v) => result.push(v));
@@ -34,10 +37,13 @@ test("simple mapping", (done) => {
 
   let doubleExecutionCounter = 0;
 
-  const double = makeDerivedValue((startFrom: number) => {
-    doubleExecutionCounter++;
-    return input(startFrom) * 2;
-  }, "double");
+  const double = makeDerivedValue(
+    (startFrom: number) => () => {
+      doubleExecutionCounter++;
+      return input(startFrom) * 2;
+    },
+    "double"
+  );
 
   const result: number[] = [];
   double.subscribe([3], (v) => result.push(v));
