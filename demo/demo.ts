@@ -1,4 +1,4 @@
-import { makeDerivedValue, makeLiveValue, useState } from "../src";
+import { makeDerivedValue, makeLiveValue, useEffect, useState } from "../src";
 
 interface WikipediaEvent {
   type: "change" | "other";
@@ -76,8 +76,6 @@ interface WikipediaUser {
   username: string;
 }
 
-// let _bestenliste: Record<string, number> = {};
-
 const bestenliste = makeDerivedValue((ctx: AuthContext) => {
   const authdata = auth(ctx);
   if (authdata.role !== "admin") {
@@ -86,14 +84,14 @@ const bestenliste = makeDerivedValue((ctx: AuthContext) => {
 
   const wikidata = wiki();
   const [bestenliste, setBestenliste] = useState<Record<string, number>>({});
-  if (wikidata.type === "change") {
-    setBestenliste(({
-      ...bestenliste,
-      [wikidata.username]: (bestenliste[wikidata.username] ?? 0) + 1
-    }))
-  }
-
-  // console.log({bestenliste})
+  useEffect(() => {
+    if (wikidata.type === "change") {
+      setBestenliste({
+        ...bestenliste,
+        [wikidata.username]: (bestenliste[wikidata.username] ?? 0) + 1,
+      });
+    }
+  }, [wikidata, setBestenliste]);
 
   return bestenliste;
 }, "bestenliste");

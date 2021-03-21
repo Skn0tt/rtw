@@ -190,6 +190,43 @@ export function useState<T>(_initial: T): [T, (v: SetStateAction<T>) => void] {
   }
 }
 
+export function useEffect(runEffect: () => void, dependencies?: any[]) {
+  if (!currentlyEvaluatingStream) {
+    throw new Error("halp");
+  }
+
+  if (typeof dependencies === "undefined") {
+    runEffect();
+    effectCounter++;
+    return;
+  }
+
+  const stream = currentlyEvaluatingStream;
+  if (effectCounter < currentlyEvaluatingStream.effects.length) {
+    const effect = stream.effects[effectCounter++];
+    const oldDependencies = effect.dependencies;
+
+    if (!arrShallowEqual(oldDependencies, dependencies)) {
+      runEffect();
+      effect.dependencies = dependencies;
+    }
+  } else if (effectCounter === currentlyEvaluatingStream.effects.length) {
+    runEffect();
+    stream.effects[effectCounter++] = {
+      dependencies,
+    };
+  } else {
+    throw new Error(
+      "Broke the rules of hooks" +
+        JSON.stringify({
+          effectsLength: currentlyEvaluatingStream.effects.length,
+          effectCounter,
+          effects: currentlyEvaluatingStream.effects,
+        })
+    );
+  }
+}
+
 export function makeLiveValue<T, Arguments extends any[]>(
   connect: (send: (v: T) => void) => (...args: Arguments) => void
 ): (...args: Arguments) => T {
