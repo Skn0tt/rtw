@@ -1,4 +1,4 @@
-import { makeDerivedValue, makeLiveValue, useEffect, useState } from "../src";
+import { makeDerivedValue, makeLiveValue } from "../src";
 import https from "https";
 
 interface WikiEvent {
@@ -26,54 +26,55 @@ const wiki = makeLiveValue<WikiEvent, []>((send) => () => {
 });
 
 const mostActiveUsers = makeDerivedValue(() => {
-  const action = wiki();
-  const [mostActiveUsers, setMostActiveUsers] = useState<
-    Record<string, number>
-  >({});
-  useEffect(() => {
-    setMostActiveUsers((old) => ({
-      ...old,
-      [action.user]: (old[action.user] ?? 0) + 1,
-    }));
-  }, [action, setMostActiveUsers]);
-  return mostActiveUsers;
+  const record: Record<string, number> = {};
+  return () => {
+    const action = wiki();
+    record[action.user] = (record[action.user] ?? 0) + 1;
+    return record;
+  };
 }, "mostActiveUsers");
 
-const top10ActiveUsers = makeDerivedValue(() => {
-  return Object.entries(mostActiveUsers())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([username]) => username);
-}, "top10ActiveUsers");
+const top10ActiveUsers = makeDerivedValue(
+  () => () => {
+    return Object.entries(mostActiveUsers())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([username]) => username);
+  },
+  "top10ActiveUsers"
+);
 
 const numberOfBotEdits = makeDerivedValue(() => {
-  const action = wiki();
-  const [numberOfBotEdits, setNumberOfBotEdits] = useState(0);
-  useEffect(() => {
+  let count = 0;
+  return () => {
+    const action = wiki();
     if (action.bot) {
-      setNumberOfBotEdits((old) => old + 1);
+      count++;
     }
-  }, [action, setNumberOfBotEdits]);
-  return numberOfBotEdits;
+    return count;
+  };
 }, "numberOfBotEdits");
 
 const numberOfHumanEdits = makeDerivedValue(() => {
-  const action = wiki();
-  const [numberOfHumanEdits, setNumberOfHumanEdits] = useState(0);
-  useEffect(() => {
+  let count = 0;
+  return () => {
+    const action = wiki();
     if (!action.bot) {
-      setNumberOfHumanEdits((old) => old + 1);
+      count++;
     }
-  }, [action, setNumberOfHumanEdits]);
-  return numberOfHumanEdits;
+    return count;
+  };
 }, "numberOfHumanEdits");
 
-const botsVsHumans = makeDerivedValue(() => {
-  const human = numberOfHumanEdits();
-  const bots = numberOfBotEdits();
+const botsVsHumans = makeDerivedValue(
+  () => () => {
+    const human = numberOfHumanEdits();
+    const bots = numberOfBotEdits();
 
-  return bots / (human + bots);
-}, "botsVsHumans");
+    return bots / (human + bots);
+  },
+  "botsVsHumans"
+);
 
 botsVsHumans.subscribe([], (value) => {
   console.log(value);

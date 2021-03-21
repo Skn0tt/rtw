@@ -3,20 +3,7 @@ export interface LiveValue<Arguments extends any[], Result> {
   subscribe(args: Arguments, onValue: (v: Result) => void): void;
 }
 
-type SetStateAction<T> = T | ((oldValue: T) => T);
-
-interface State<T> {
-  value: T;
-  setValue(value: SetStateAction<T>): void;
-}
-
-interface Effect {
-  dependencies: any[];
-}
-
 interface Stream<Result> {
-  // template: Template<Arguments, Result>;
-  // arguments: Arguments;
   hasValue: boolean;
   lastValue: Result;
   notify(): void;
@@ -24,8 +11,6 @@ interface Stream<Result> {
   derive: Function;
   args: any[];
   name: string;
-  states: any[];
-  effects: Effect[];
 }
 
 function arrShallowEqual(a: any[], b: any[]) {
@@ -33,47 +18,37 @@ function arrShallowEqual(a: any[], b: any[]) {
 }
 
 let currentlyEvaluatingStream: Stream<any> | null = null;
-let stateCounter = 0;
-let effectCounter = 0;
-let stateHasBeenChanged = false;
 
 function withStream(stream: Stream<any>, doIt: () => void) {
   const oldEvaluatingStream = currentlyEvaluatingStream;
-  stateCounter = 0;
-  effectCounter = 0;
-  stateHasBeenChanged = false;
   currentlyEvaluatingStream = stream;
   doIt();
   currentlyEvaluatingStream = oldEvaluatingStream;
 }
 
 export function makeDerivedValue<Arguments extends any[], Result>(
-  derive: (...args: Arguments) => Result,
+  makeDerive: (...args: Arguments) => () => Result,
   name: string
 ): LiveValue<Arguments, Result> {
   const wrapper: LiveValue<Arguments, Result> = (...args) => {
-    const stream = findOrMakeStream({
-      args,
-      name,
-      notify() {
-        const oldValue = stream.lastValue;
-        withStream(stream, () => {
-          stream.lastValue = derive(...args);
-          stream.hasValue = true;
-        });
-
-        if (stateHasBeenChanged) {
+    const stream = findOrMakeStream(
+      {
+        args,
+        name,
+        notify() {
+          const oldValue = stream.lastValue;
           withStream(stream, () => {
-            stream.lastValue = derive(...args);
+            stream.lastValue = stream.derive();
             stream.hasValue = true;
           });
-        }
 
-        if (oldValue !== stream.lastValue) {
-          stream.dependents.forEach((dependent) => dependent.notify());
-        }
+          if (oldValue !== stream.lastValue) {
+            stream.dependents.forEach((dependent) => dependent.notify());
+          }
+        },
       },
-    });
+      makeDerive
+    );
 
     if (currentlyEvaluatingStream) {
       stream.dependents.add(currentlyEvaluatingStream);
@@ -83,7 +58,7 @@ export function makeDerivedValue<Arguments extends any[], Result>(
 
     if (!stream.hasValue) {
       withStream(stream, () => {
-        stream.lastValue = derive(...args);
+        stream.lastValue = stream.derive();
         stream.hasValue = true;
       });
     }
@@ -92,11 +67,10 @@ export function makeDerivedValue<Arguments extends any[], Result>(
   };
 
   const streams: Stream<Result>[] = [];
-  function findOrMakeStream({
-    args,
-    name,
-    notify,
-  }: Pick<Stream<Result>, "args" | "name" | "notify">): Stream<Result> {
+  function findOrMakeStream(
+    { args, name, notify }: Pick<Stream<Result>, "args" | "name" | "notify">,
+    makeDerive: (...args: Arguments) => () => Result
+  ): Stream<Result> {
     const foundStream = streams.find((s) => {
       return arrShallowEqual(args, s.args);
     });
@@ -108,33 +82,34 @@ export function makeDerivedValue<Arguments extends any[], Result>(
     const stream: Stream<Result> = {
       name,
       dependents: new Set(),
-      derive,
+      derive: makeDerive(...(args as any)),
       args,
       notify,
       hasValue: false,
       lastValue: null as any,
-      states: [],
-      effects: [],
     };
     streams.push(stream);
     return stream;
   }
   wrapper.subscribe = (args, onValue) => {
-    const stream = findOrMakeStream({
-      args,
-      name,
-      notify() {
-        const oldValue = stream.lastValue;
-        withStream(stream, () => {
-          stream.lastValue = derive(...args);
-          stream.hasValue = true;
-        });
+    const stream = findOrMakeStream(
+      {
+        args,
+        name,
+        notify() {
+          const oldValue = stream.lastValue;
+          withStream(stream, () => {
+            stream.lastValue = stream.derive();
+            stream.hasValue = true;
+          });
 
-        if (oldValue !== stream.lastValue || stateHasBeenChanged) {
-          onValue(stream.lastValue);
-        }
+          if (oldValue !== stream.lastValue) {
+            onValue(stream.lastValue);
+          }
+        },
       },
-    });
+      makeDerive
+    );
 
     try {
       stream.notify();
@@ -146,85 +121,6 @@ export function makeDerivedValue<Arguments extends any[], Result>(
   };
 
   return wrapper;
-}
-
-export function useState<T>(_initial: T): [T, (v: SetStateAction<T>) => void] {
-  if (!currentlyEvaluatingStream) {
-    throw new Error("halp");
-  }
-
-  const stream = currentlyEvaluatingStream;
-  if (stateCounter < currentlyEvaluatingStream.states.length) {
-    const state = stream.states[stateCounter];
-    stateCounter++;
-
-    return [state.value, state.setValue];
-  } else if (stateCounter === currentlyEvaluatingStream.states.length) {
-    const state: State<T> = {
-      value: _initial,
-      setValue(action: SetStateAction<T>) {
-        const oldValue = state.value;
-        if (typeof action === "function") {
-          state.value = (action as any)(state.value);
-        } else {
-          state.value = action;
-        }
-
-        if (oldValue !== state.value) {
-          stateHasBeenChanged = true;
-        }
-      },
-    };
-    stream.states.push(state);
-    stateCounter++;
-    return [state.value, state.setValue];
-  } else {
-    throw new Error(
-      "Broke the rules of hooks" +
-        JSON.stringify({
-          statesLength: currentlyEvaluatingStream.states.length,
-          stateCounter,
-          states: currentlyEvaluatingStream.states,
-        })
-    );
-  }
-}
-
-export function useEffect(runEffect: () => void, dependencies?: any[]) {
-  if (!currentlyEvaluatingStream) {
-    throw new Error("halp");
-  }
-
-  if (typeof dependencies === "undefined") {
-    runEffect();
-    effectCounter++;
-    return;
-  }
-
-  const stream = currentlyEvaluatingStream;
-  if (effectCounter < currentlyEvaluatingStream.effects.length) {
-    const effect = stream.effects[effectCounter++];
-    const oldDependencies = effect.dependencies;
-
-    if (!arrShallowEqual(oldDependencies, dependencies)) {
-      runEffect();
-      effect.dependencies = dependencies;
-    }
-  } else if (effectCounter === currentlyEvaluatingStream.effects.length) {
-    runEffect();
-    stream.effects[effectCounter++] = {
-      dependencies,
-    };
-  } else {
-    throw new Error(
-      "Broke the rules of hooks" +
-        JSON.stringify({
-          effectsLength: currentlyEvaluatingStream.effects.length,
-          effectCounter,
-          effects: currentlyEvaluatingStream.effects,
-        })
-    );
-  }
 }
 
 export function makeLiveValue<T, Arguments extends any[]>(
