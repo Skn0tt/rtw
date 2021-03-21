@@ -1,4 +1,4 @@
-import { makeDerivedValue, makeLiveValue } from "../src";
+import { makeDerivedValue, makeLiveValue, useState } from "../src";
 
 interface WikipediaEvent {
   type: "change" | "other";
@@ -76,7 +76,7 @@ interface WikipediaUser {
   username: string;
 }
 
-let _bestenliste: Record<string, number> = {};
+// let _bestenliste: Record<string, number> = {};
 
 const bestenliste = makeDerivedValue((ctx: AuthContext) => {
   const authdata = auth(ctx);
@@ -85,15 +85,15 @@ const bestenliste = makeDerivedValue((ctx: AuthContext) => {
   }
 
   const wikidata = wiki();
-  // const [bestenliste, setBestenliste] = useState<Record<string, number>>({});
+  const [bestenliste, setBestenliste] = useState<Record<string, number>>({});
   if (wikidata.type === "change") {
-    _bestenliste = {
-      ..._bestenliste,
-      [wikidata.username]: (_bestenliste[wikidata.username] ?? 0) + 1,
-    };
+    setBestenliste(({
+      ...bestenliste,
+      [wikidata.username]: (bestenliste[wikidata.username] ?? 0) + 1
+    }))
   }
 
-  return _bestenliste;
+  return bestenliste;
 }, "bestenliste");
 
 const top100 = makeDerivedValue((ctx: AuthContext) => {
