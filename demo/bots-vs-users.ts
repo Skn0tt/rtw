@@ -14,7 +14,9 @@ const wiki = makeLiveValue<WikiEvent, []>((send) => () => {
       if (line.startsWith("data:")) {
         const json = line.slice("data: ".length);
         try {
-          send(JSON.parse(json));
+          if (Math.random() < 0.05) {
+            send(JSON.parse(json));
+          }
         } catch (error) {
           // do nothing
         }
@@ -67,12 +69,10 @@ const numberOfHumanEdits = makeDerivedValue(() => {
 }, "numberOfHumanEdits");
 
 const botsVsHumans = makeDerivedValue(() => {
-  const bots = numberOfBotEdits();
   const human = numberOfHumanEdits();
+  const bots = numberOfBotEdits();
 
-  console.log({ bots, human });
-
-  return bots / human;
+  return bots / (human + bots);
 }, "botsVsHumans");
 
 botsVsHumans.subscribe([], (value) => {

@@ -253,11 +253,12 @@ export function makeLiveValue<T, Arguments extends any[]>(
       })(...args);
 
       isConnected = true;
-      if (currentlyEvaluatingStream) {
-        dependents.add(currentlyEvaluatingStream);
-      } else {
-        throw new Error("halp");
-      }
+    }
+
+    if (currentlyEvaluatingStream) {
+      dependents.add(currentlyEvaluatingStream);
+    } else {
+      throw new Error("halp");
     }
 
     if (!hasValue) {
