@@ -1,12 +1,12 @@
-import { makeTemplate, makeInput } from '../src';
+import { makeTemplate, makeInput } from "../src";
 
 interface WikipediaEvent {
-  type: 'change' | 'other';
+  type: "change" | "other";
   username: string;
   page: string;
 }
 
-const wiki = makeInput<WikipediaEvent, []>(send => () => {
+const wiki = makeInput<WikipediaEvent, []>((send) => () => {
   /*
   send({
     type: 'change',
@@ -15,13 +15,15 @@ const wiki = makeInput<WikipediaEvent, []>(send => () => {
   });
   */
 
-  setInterval(() => {
-    send({
-      type: 'change',
-      username: 'paul',
-      page: 'Hallo Welt',
-    });
-  }, 1000);
+  setTimeout(() => {
+    setInterval(() => {
+      send({
+        type: "change",
+        username: "paul",
+        page: "Hallo Welt",
+      });
+    }, 1000);
+  }, 100);
 
   /*
   setInterval(() => {
@@ -55,41 +57,44 @@ const wiki = makeInput<WikipediaEvent, []>(send => () => {
 });
 
 interface AuthResult {
-  role: 'customer' | 'admin';
+  role: "customer" | "admin";
 }
 
-const auth = makeTemplate((ctx: AuthContext): AuthResult => {
-  if (ctx.userId === 'bert') {
-    return {
-      role: 'admin',
-    };
+const auth = makeInput<AuthResult, [AuthContext]>((send) => (ctx) => {
+  if (ctx.userId === "bert") {
+    send({
+      role: "admin",
+    });
+  } else {
+    send({
+      role: "customer",
+    });
   }
-  return {
-    role: 'customer',
-  };
-}, 'auth');
+});
 
 interface WikipediaUser {
   username: string;
 }
 
-const _bestenliste: Record<string, number> = {};
+let _bestenliste: Record<string, number> = {};
 
 const bestenliste = makeTemplate((ctx: AuthContext) => {
   const authdata = auth(ctx);
-  if (authdata.role !== 'admin') {
-    throw new Error('Unauthorized');
+  if (authdata.role !== "admin") {
+    throw new Error("Unauthorized");
   }
 
   const wikidata = wiki();
   // const [bestenliste, setBestenliste] = useState<Record<string, number>>({});
-  if (wikidata.type === 'change') {
-    _bestenliste[wikidata.username] =
-      (_bestenliste[wikidata.username] ?? 0) + 1;
+  if (wikidata.type === "change") {
+    _bestenliste = {
+      ..._bestenliste,
+      [wikidata.username]: (_bestenliste[wikidata.username] ?? 0) + 1,
+    };
   }
 
   return _bestenliste;
-}, 'bestenliste');
+}, "bestenliste");
 
 const top100 = makeTemplate((ctx: AuthContext) => {
   const v = bestenliste(ctx);
@@ -98,7 +103,7 @@ const top100 = makeTemplate((ctx: AuthContext) => {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 100)
     .map(([username, score]) => ({ username, score }));
-}, 'top100');
+}, "top100");
 
 interface AuthContext {
   userId: string;
@@ -107,15 +112,15 @@ interface AuthContext {
 const top10 = makeTemplate((auth: AuthContext): WikipediaUser[] => {
   const v = top100(auth);
   return v.slice(0, 10);
-}, 'top10');
+}, "top10");
 
 top10.subscribe(
   [
     {
-      userId: 'bert',
+      userId: "bert",
     },
   ],
-  top10 => {
+  (top10) => {
     console.log(top10);
   }
 );

@@ -6,6 +6,7 @@ export interface Template<Arguments extends any[], Result> {
 interface Stream<Result> {
   // template: Template<Arguments, Result>;
   // arguments: Arguments;
+  hasValue: boolean;
   lastValue: Result;
   notify(): void;
   dependents: Set<Stream<any>>;
@@ -20,27 +21,30 @@ function arrShallowEqual(a: any[], b: any[]) {
 
 const allStreams: Stream<any>[] = [];
 
-function getStream<Result>(
-  templateDerive: Function,
-  args: any[]
-): Stream<Result> | undefined {
-  return allStreams.find(s => {
-    return s.derive === templateDerive && arrShallowEqual(args, s.args);
+function findOrMakeStream<Result>({
+  derive,
+  args,
+  name,
+  notify,
+}: Pick<
+  Stream<Result>,
+  "derive" | "args" | "name" | "notify"
+>): Stream<Result> {
+  const foundStream = allStreams.find((s) => {
+    return s.derive === derive && arrShallowEqual(args, s.args);
   });
-}
 
-function makeStream<Result>(
-  templateDerive: Function,
-  args: any[],
-  name: string,
-  notify: () => void
-): Stream<Result> {
+  if (foundStream) {
+    return foundStream;
+  }
+
   const stream: Stream<Result> = {
     name,
     dependents: new Set(),
-    derive: templateDerive,
+    derive,
     args,
     notify,
+    hasValue: false,
     lastValue: null as any,
   };
 
@@ -54,7 +58,7 @@ let currentlyEvaluatingStream: Stream<any> | null = null;
 function withStream(stream: Stream<any>, doIt: () => void) {
   const oldEvaluatingStream = currentlyEvaluatingStream;
   currentlyEvaluatingStream = stream;
-  doIt()
+  doIt();
   currentlyEvaluatingStream = oldEvaluatingStream;
 }
 
@@ -63,55 +67,63 @@ export function makeTemplate<Arguments extends any[], Result>(
   name: string
 ): Template<Arguments, Result> {
   const wrapper: Template<Arguments, Result> = (...args) => {
-    let stream = getStream<Result>(derive, args);
-    if (!stream) {
-      stream = makeStream(derive, args, name, () => {
-        withStream(stream!, () => {
-          stream!.lastValue = derive(...args);
-        })
+    const stream = findOrMakeStream<Result>({
+      derive,
+      args,
+      name,
+      notify() {
+        const oldValue = stream.lastValue;
+        withStream(stream, () => {
+          stream.lastValue = derive(...args);
+          stream.hasValue = true;
+        });
 
-        stream!.dependents.forEach(dependent => dependent.notify());
-      });
-    }
+        if (oldValue !== stream.lastValue) {
+          stream.dependents.forEach((dependent) => dependent.notify());
+        }
+      },
+    });
 
     if (currentlyEvaluatingStream) {
       stream.dependents.add(currentlyEvaluatingStream);
     } else {
-      throw new Error('halp');
+      throw new Error("halp");
     }
 
-    const oldEvaluatingStream = currentlyEvaluatingStream;
-    currentlyEvaluatingStream = stream;
-    stream.lastValue = derive(...args);
-    currentlyEvaluatingStream = oldEvaluatingStream;
+    if (!stream.hasValue) {
+      withStream(stream, () => {
+        stream.lastValue = derive(...args);
+        stream.hasValue = true;
+      });
+    }
 
     return stream.lastValue;
   };
 
   wrapper.subscribe = (args, onValue) => {
-    let stream = getStream<Result>(derive, args);
-    if (!stream) {
-      stream = makeStream(derive, args, name, () => {
-        withStream(stream!, () => {
-          stream!.lastValue = derive(...args);
-        })
-        onValue(stream!.lastValue);
-      });
-    }
+    const stream = findOrMakeStream<Result>({
+      derive,
+      args,
+      name,
+      notify() {
+        const oldValue = stream.lastValue;
+        withStream(stream, () => {
+          stream.lastValue = derive(...args);
+          stream.hasValue = true;
+        });
+
+        if (oldValue !== stream.lastValue) {
+          onValue(stream.lastValue);
+        }
+      },
+    });
 
     try {
-      withStream(stream!, () => {
-        stream!.lastValue = derive(...args);
-      })
-      onValue(stream.lastValue);
+      stream.notify();
     } catch (error) {
       if (!error.then) {
         throw error;
       }
-
-      error.then(() => {
-        wrapper.subscribe(args, onValue);
-      });
     }
   };
 
@@ -135,11 +147,11 @@ export function makeInput<T, Arguments extends any[]>(
 
   return function input(...args: Arguments) {
     if (!isConnected) {
-      connect(v => {
+      connect((v) => {
         hasValue = true;
         lastValue = v;
 
-        dependents.forEach(dependent => {
+        dependents.forEach((dependent) => {
           dependent.notify();
         });
 
@@ -151,11 +163,12 @@ export function makeInput<T, Arguments extends any[]>(
       if (currentlyEvaluatingStream) {
         dependents.add(currentlyEvaluatingStream);
       } else {
-        throw new Error('halp');
+        throw new Error("halp");
       }
     }
+
     if (!hasValue) {
-      throw new Promise<void>(_resolve => {
+      throw new Promise<void>((_resolve) => {
         resolve = _resolve;
       });
     }
