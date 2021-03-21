@@ -86,10 +86,10 @@ const bestenliste = makeDerivedValue((ctx: AuthContext) => {
   const [bestenliste, setBestenliste] = useState<Record<string, number>>({});
   useEffect(() => {
     if (wikidata.type === "change") {
-      setBestenliste({
-        ...bestenliste,
-        [wikidata.username]: (bestenliste[wikidata.username] ?? 0) + 1,
-      });
+      setBestenliste(old => ({
+        ...old,
+        [wikidata.username]: (old[wikidata.username] ?? 0) + 1,
+      }));
     }
   }, [wikidata, setBestenliste]);
 
