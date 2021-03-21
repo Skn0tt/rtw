@@ -1,11 +1,13 @@
 import { makeLiveValue, makeDerivedValue } from "../src";
 
 test("Only the most current value is passed down", () => {
-  const input = makeLiveValue<number, [number]>((send) => (startFrom: number) => {
-    send(startFrom);
-    send(startFrom + 1);
-    send(startFrom + 2);
-  });
+  const input = makeLiveValue<number, [number]>(
+    (send) => (startFrom: number) => {
+      send(startFrom);
+      send(startFrom + 1);
+      send(startFrom + 2);
+    }
+  );
 
   const double = makeDerivedValue((startFrom: number) => {
     return input(startFrom) * 2;
@@ -18,17 +20,22 @@ test("Only the most current value is passed down", () => {
 });
 
 test("simple mapping", (done) => {
-  const input = makeLiveValue<number, [number]>((send) => (startFrom: number) => {
-    send(startFrom);
-    setTimeout(() => {
-      send(startFrom + 1);
-    }, 1);
-    setTimeout(() => {
-      send(startFrom + 2);
-    }, 2);
-  });
+  const input = makeLiveValue<number, [number]>(
+    (send) => (startFrom: number) => {
+      send(startFrom);
+      setTimeout(() => {
+        send(startFrom + 1);
+      }, 1);
+      setTimeout(() => {
+        send(startFrom + 2);
+      }, 2);
+    }
+  );
+
+  let doubleExecutionCounter = 0;
 
   const double = makeDerivedValue((startFrom: number) => {
+    doubleExecutionCounter++;
     return input(startFrom) * 2;
   }, "double");
 
@@ -37,6 +44,7 @@ test("simple mapping", (done) => {
 
   setTimeout(() => {
     expect(result).toEqual([6, 8, 10]);
+    expect(doubleExecutionCounter).toEqual(3);
     done();
   }, 5);
 });
