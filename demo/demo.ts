@@ -93,6 +93,8 @@ const bestenliste = makeDerivedValue((ctx: AuthContext) => {
     }))
   }
 
+  // console.log({bestenliste})
+
   return bestenliste;
 }, "bestenliste");
 

@@ -35,13 +35,13 @@ function arrShallowEqual(a: any[], b: any[]) {
 let currentlyEvaluatingStream: Stream<any> | null = null;
 let stateCounter = 0;
 let effectCounter = 0;
-let needsToNotify = false;
+let stateHasBeenChanged = false;
 
 function withStream(stream: Stream<any>, doIt: () => void) {
   const oldEvaluatingStream = currentlyEvaluatingStream;
   stateCounter = 0;
   effectCounter = 0;
-  needsToNotify = false;
+  stateHasBeenChanged = false;
   currentlyEvaluatingStream = stream;
   doIt();
   currentlyEvaluatingStream = oldEvaluatingStream;
@@ -62,7 +62,14 @@ export function makeDerivedValue<Arguments extends any[], Result>(
           stream.hasValue = true;
         });
 
-        if (oldValue !== stream.lastValue || needsToNotify) {
+        if (stateHasBeenChanged) {
+          withStream(stream, () => {
+            stream.lastValue = derive(...args);
+            stream.hasValue = true;
+          });
+        }
+
+        if (oldValue !== stream.lastValue) {
           stream.dependents.forEach((dependent) => dependent.notify());
         }
       },
@@ -123,7 +130,7 @@ export function makeDerivedValue<Arguments extends any[], Result>(
           stream.hasValue = true;
         });
 
-        if (oldValue !== stream.lastValue || needsToNotify) {
+        if (oldValue !== stream.lastValue || stateHasBeenChanged) {
           onValue(stream.lastValue);
         }
       },
@@ -141,7 +148,7 @@ export function makeDerivedValue<Arguments extends any[], Result>(
   return wrapper;
 }
 
-export function useState<T>(_initial: T): [T, (v: T) => void] {
+export function useState<T>(_initial: T): [T, (v: SetStateAction<T>) => void] {
   if (!currentlyEvaluatingStream) {
     throw new Error("halp");
   }
@@ -164,7 +171,7 @@ export function useState<T>(_initial: T): [T, (v: T) => void] {
         }
 
         if (oldValue !== state.value) {
-          needsToNotify = true;
+          stateHasBeenChanged = true;
         }
       },
     };
