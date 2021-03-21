@@ -1,4 +1,4 @@
-export interface Template<Arguments extends any[], Result> {
+export interface LiveValue<Arguments extends any[], Result> {
   (...args: Arguments): Result;
   subscribe(args: Arguments, onValue: (v: Result) => void): void;
 }
@@ -62,11 +62,11 @@ function withStream(stream: Stream<any>, doIt: () => void) {
   currentlyEvaluatingStream = oldEvaluatingStream;
 }
 
-export function makeTemplate<Arguments extends any[], Result>(
+export function makeDerivedValue<Arguments extends any[], Result>(
   derive: (...args: Arguments) => Result,
   name: string
-): Template<Arguments, Result> {
-  const wrapper: Template<Arguments, Result> = (...args) => {
+): LiveValue<Arguments, Result> {
+  const wrapper: LiveValue<Arguments, Result> = (...args) => {
     const stream = findOrMakeStream<Result>({
       derive,
       args,
@@ -134,7 +134,7 @@ export function useState<T>(_initial: T): [T, (v: T) => void] {
   return null as any;
 }
 
-export function makeInput<T, Arguments extends any[]>(
+export function makeLiveValue<T, Arguments extends any[]>(
   connect: (send: (v: T) => void) => (...args: Arguments) => void
 ): (...args: Arguments) => T {
   let lastValue: T | null = null;

@@ -1,4 +1,4 @@
-import { makeTemplate, makeInput } from "../src";
+import { makeDerivedValue, makeLiveValue } from "../src";
 
 interface WikipediaEvent {
   type: "change" | "other";
@@ -6,7 +6,7 @@ interface WikipediaEvent {
   page: string;
 }
 
-const wiki = makeInput<WikipediaEvent, []>((send) => () => {
+const wiki = makeLiveValue<WikipediaEvent, []>((send) => () => {
   /*
   send({
     type: 'change',
@@ -60,7 +60,7 @@ interface AuthResult {
   role: "customer" | "admin";
 }
 
-const auth = makeInput<AuthResult, [AuthContext]>((send) => (ctx) => {
+const auth = makeLiveValue<AuthResult, [AuthContext]>((send) => (ctx) => {
   if (ctx.userId === "bert") {
     send({
       role: "admin",
@@ -78,7 +78,7 @@ interface WikipediaUser {
 
 let _bestenliste: Record<string, number> = {};
 
-const bestenliste = makeTemplate((ctx: AuthContext) => {
+const bestenliste = makeDerivedValue((ctx: AuthContext) => {
   const authdata = auth(ctx);
   if (authdata.role !== "admin") {
     throw new Error("Unauthorized");
@@ -96,7 +96,7 @@ const bestenliste = makeTemplate((ctx: AuthContext) => {
   return _bestenliste;
 }, "bestenliste");
 
-const top100 = makeTemplate((ctx: AuthContext) => {
+const top100 = makeDerivedValue((ctx: AuthContext) => {
   const v = bestenliste(ctx);
 
   return Object.entries(v)
@@ -109,7 +109,7 @@ interface AuthContext {
   userId: string;
 }
 
-const top10 = makeTemplate((auth: AuthContext): WikipediaUser[] => {
+const top10 = makeDerivedValue((auth: AuthContext): WikipediaUser[] => {
   const v = top100(auth);
   return v.slice(0, 10);
 }, "top10");

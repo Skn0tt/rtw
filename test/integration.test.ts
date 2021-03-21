@@ -1,13 +1,13 @@
-import { makeInput, makeTemplate } from "../src";
+import { makeLiveValue, makeDerivedValue } from "../src";
 
 test("Only the most current value is passed down", () => {
-  const input = makeInput<number, [number]>((send) => (startFrom: number) => {
+  const input = makeLiveValue<number, [number]>((send) => (startFrom: number) => {
     send(startFrom);
     send(startFrom + 1);
     send(startFrom + 2);
   });
 
-  const double = makeTemplate((startFrom: number) => {
+  const double = makeDerivedValue((startFrom: number) => {
     return input(startFrom) * 2;
   }, "double");
 
@@ -18,7 +18,7 @@ test("Only the most current value is passed down", () => {
 });
 
 test("simple mapping", (done) => {
-  const input = makeInput<number, [number]>((send) => (startFrom: number) => {
+  const input = makeLiveValue<number, [number]>((send) => (startFrom: number) => {
     send(startFrom);
     setTimeout(() => {
       send(startFrom + 1);
@@ -28,7 +28,7 @@ test("simple mapping", (done) => {
     }, 2);
   });
 
-  const double = makeTemplate((startFrom: number) => {
+  const double = makeDerivedValue((startFrom: number) => {
     return input(startFrom) * 2;
   }, "double");
 
