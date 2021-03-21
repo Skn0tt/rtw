@@ -3,14 +3,16 @@ export interface LiveValue<Arguments extends any[], Result> {
   subscribe(args: Arguments, onValue: (v: Result) => void): void;
 }
 
-interface Stream<Result> {
+interface Notifiable {
+  notify(): void;
+}
+
+interface Stream<Result> extends Notifiable {
   hasValue: boolean;
   lastValue: Result;
-  notify(): void;
-  dependents: Set<Stream<any>>;
+  dependents: Set<Notifiable>;
   derive: Function;
   args: any[];
-  name: string;
 }
 
 function arrShallowEqual(a: any[], b: any[]) {
@@ -27,25 +29,10 @@ function withStream(stream: Stream<any>, doIt: () => void) {
 }
 
 export function makeDerivedValue<Arguments extends any[], Result>(
-  makeDerive: (...args: Arguments) => () => Result,
-  name: string
+  makeDerive: (...args: Arguments) => () => Result
 ): LiveValue<Arguments, Result> {
   const wrapper: LiveValue<Arguments, Result> = (...args) => {
-    const stream = findOrMakeStream(
-      {
-        args,
-        name,
-        notify() {
-          withStream(stream, () => {
-            stream.lastValue = stream.derive();
-            stream.hasValue = true;
-          });
-
-          stream.dependents.forEach((dependent) => dependent.notify());
-        },
-      },
-      makeDerive
-    );
+    const stream = findOrMakeStream(args, makeDerive);
 
     if (currentlyEvaluatingStream) {
       stream.dependents.add(currentlyEvaluatingStream);
@@ -65,7 +52,7 @@ export function makeDerivedValue<Arguments extends any[], Result>(
 
   const streams: Stream<Result>[] = [];
   function findOrMakeStream(
-    { args, name, notify }: Pick<Stream<Result>, "args" | "name" | "notify">,
+    args: Stream<any>["args"],
     makeDerive: (...args: Arguments) => () => Result
   ): Stream<Result> {
     const foundStream = streams.find((s) => {
@@ -77,33 +64,32 @@ export function makeDerivedValue<Arguments extends any[], Result>(
     }
 
     const stream: Stream<Result> = {
-      name,
       dependents: new Set(),
       derive: makeDerive(...(args as any)),
       args,
-      notify,
+      notify() {
+        withStream(stream, () => {
+          stream.lastValue = stream.derive();
+          stream.hasValue = true;
+        });
+
+        stream.dependents.forEach((dependent) => dependent.notify());
+      },
       hasValue: false,
       lastValue: null as any,
     };
     streams.push(stream);
     return stream;
   }
+  
   wrapper.subscribe = (args, onValue) => {
-    const stream = findOrMakeStream(
-      {
-        args,
-        name,
-        notify() {
-          withStream(stream, () => {
-            stream.lastValue = stream.derive();
-            stream.hasValue = true;
-          });
+    const stream = findOrMakeStream(args, makeDerive);
 
-          onValue(stream.lastValue);
-        },
+    stream.dependents.add({
+      notify() {
+        onValue(stream.lastValue);
       },
-      makeDerive
-    );
+    });
 
     try {
       stream.notify();

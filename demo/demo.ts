@@ -55,30 +55,24 @@ const bestenliste = makeDerivedValue((ctx: AuthContext) => {
 
     return bestenliste;
   };
-}, "bestenliste");
+});
 
-const top100 = makeDerivedValue(
-  (ctx: AuthContext) => () => {
-    const v = bestenliste(ctx);
+const top100 = makeDerivedValue((ctx: AuthContext) => () => {
+  const v = bestenliste(ctx);
 
-    return Object.entries(v)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 100)
-      .map(([username, score]) => ({ username, score }));
-  },
-  "top100"
-);
+  return Object.entries(v)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 100)
+    .map(([username, score]) => ({ username, score }));
+});
 
 interface AuthContext {
   userId: string;
 }
 
-const top10 = makeDerivedValue(
-  (auth: AuthContext) => () => {
-    return top100(auth).slice(0, 10);
-  },
-  "top10"
-);
+const top10 = makeDerivedValue((auth: AuthContext) => () => {
+  return top100(auth).slice(0, 10);
+});
 
 top10.subscribe(
   [

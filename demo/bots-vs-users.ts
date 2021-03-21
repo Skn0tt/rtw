@@ -32,17 +32,14 @@ const mostActiveUsers = makeDerivedValue(() => {
     record[action.user] = (record[action.user] ?? 0) + 1;
     return record;
   };
-}, "mostActiveUsers");
+});
 
-const top10ActiveUsers = makeDerivedValue(
-  () => () => {
-    return Object.entries(mostActiveUsers())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([username]) => username);
-  },
-  "top10ActiveUsers"
-);
+const top10ActiveUsers = makeDerivedValue(() => () => {
+  return Object.entries(mostActiveUsers())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([username]) => username);
+});
 
 const numberOfBotEdits = makeDerivedValue(() => {
   let count = 0;
@@ -53,7 +50,7 @@ const numberOfBotEdits = makeDerivedValue(() => {
     }
     return count;
   };
-}, "numberOfBotEdits");
+});
 
 const numberOfHumanEdits = makeDerivedValue(() => {
   let count = 0;
@@ -64,17 +61,14 @@ const numberOfHumanEdits = makeDerivedValue(() => {
     }
     return count;
   };
-}, "numberOfHumanEdits");
+});
 
-const botsVsHumans = makeDerivedValue(
-  () => () => {
-    const human = numberOfHumanEdits();
-    const bots = numberOfBotEdits();
+const botsVsHumans = makeDerivedValue(() => () => {
+  const human = numberOfHumanEdits();
+  const bots = numberOfBotEdits();
 
-    return bots / (human + bots);
-  },
-  "botsVsHumans"
-);
+  return bots / (human + bots);
+});
 
 botsVsHumans.subscribe([], (value) => {
   console.log(value);
