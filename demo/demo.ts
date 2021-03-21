@@ -1,4 +1,4 @@
-import { makeDerivedValue, makeLiveValue, useEffect, useState } from "../src";
+import { makeDerivedValue, makeLiveValue } from "../src";
 
 interface WikipediaEvent {
   type: "change" | "other";
@@ -86,7 +86,7 @@ const bestenliste = makeDerivedValue((ctx: AuthContext) => {
   const [bestenliste, setBestenliste] = useState<Record<string, number>>({});
   useEffect(() => {
     if (wikidata.type === "change") {
-      setBestenliste(old => ({
+      setBestenliste((old) => ({
         ...old,
         [wikidata.username]: (old[wikidata.username] ?? 0) + 1,
       }));
