@@ -7,6 +7,21 @@ const input = makeLiveValue<number, []>(() => (send) => {
   }, 500);
 });
 
+const input2 = makeLiveValue<number, []>(() => (send) => {
+  setInterval(() => {
+    const x: number = Math.random();
+    send(x);
+  }, 1000);
+});
+
+const sum = makeDerivedValue(() => {
+  return () => {
+    const firstInput = input();
+    const secondInput = input2();
+    return firstInput + secondInput;
+  };
+});
+
 const average = makeDerivedValue(() => {
   let n = 0;
   let avg = 0;
@@ -33,7 +48,9 @@ const difference = makeDerivedValue(() => () => {
   return currentAvg - currentMin;
 });
 
-min.subscribe([], (v) => console.log("min", v));
-average.subscribe([], (v) => console.log("avg ", v));
-difference.subscribe([], (v) => console.log("difference: ", v));
-input.subscribe([],(v)=>console.log("input: ", v))
+// min.subscribe([], (v) => console.log("min", v));
+// average.subscribe([], (v) => console.log("avg ", v));
+// difference.subscribe([], (v) => console.log("difference: ", v));
+input.subscribe([], (v) => console.log("input: ", v));
+input2.subscribe([], (v) => console.log("input2: ", v));
+sum.subscribe([], (v) => console.log("sum: ", v));
