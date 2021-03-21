@@ -36,15 +36,12 @@ export function makeDerivedValue<Arguments extends any[], Result>(
         args,
         name,
         notify() {
-          const oldValue = stream.lastValue;
           withStream(stream, () => {
             stream.lastValue = stream.derive();
             stream.hasValue = true;
           });
 
-          if (oldValue !== stream.lastValue) {
-            stream.dependents.forEach((dependent) => dependent.notify());
-          }
+          stream.dependents.forEach((dependent) => dependent.notify());
         },
       },
       makeDerive
@@ -97,15 +94,12 @@ export function makeDerivedValue<Arguments extends any[], Result>(
         args,
         name,
         notify() {
-          const oldValue = stream.lastValue;
           withStream(stream, () => {
             stream.lastValue = stream.derive();
             stream.hasValue = true;
           });
 
-          if (oldValue !== stream.lastValue) {
-            onValue(stream.lastValue);
-          }
+          onValue(stream.lastValue);
         },
       },
       makeDerive
@@ -124,7 +118,7 @@ export function makeDerivedValue<Arguments extends any[], Result>(
 }
 
 export function makeLiveValue<T, Arguments extends any[]>(
-  connect: (send: (v: T) => void) => (...args: Arguments) => void
+  connect: (...args: Arguments) => (send: (v: T) => void) => void
 ): (...args: Arguments) => T {
   let lastValue: T | null = null;
   let hasValue = false;
@@ -136,7 +130,7 @@ export function makeLiveValue<T, Arguments extends any[]>(
 
   return function input(...args: Arguments) {
     if (!isConnected) {
-      connect((v) => {
+      connect(...args)((v) => {
         hasValue = true;
         lastValue = v;
 
@@ -146,7 +140,7 @@ export function makeLiveValue<T, Arguments extends any[]>(
 
         resolve?.();
         resolve = null;
-      })(...args);
+      });
 
       isConnected = true;
     }

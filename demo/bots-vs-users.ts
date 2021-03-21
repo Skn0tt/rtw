@@ -7,7 +7,7 @@ interface WikiEvent {
   minor: boolean;
 }
 
-const wiki = makeLiveValue<WikiEvent, []>((send) => () => {
+const wiki = makeLiveValue<WikiEvent, []>(() => (send) => {
   https.get("https://stream.wikimedia.org/v2/stream/recentchange", (res) => {
     res.on("data", (buf: Buffer) => {
       const line = buf.toString();

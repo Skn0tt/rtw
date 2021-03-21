@@ -6,15 +6,7 @@ interface WikipediaEvent {
   page: string;
 }
 
-const wiki = makeLiveValue<WikipediaEvent, []>((send) => () => {
-  /*
-  send({
-    type: 'change',
-    username: 'paul',
-    page: 'Hallo Welt',
-  });
-  */
-
+const wiki = makeLiveValue<WikipediaEvent, []>(() => (send) => {
   setTimeout(() => {
     setInterval(() => {
       send({
@@ -25,32 +17,6 @@ const wiki = makeLiveValue<WikipediaEvent, []>((send) => () => {
     }, 1000);
   }, 100);
 
-  /*
-  setInterval(() => {
-    send({
-      type: 'change',
-      username: 'thomas',
-      page: 'Hallo Welt',
-    });
-  }, 3000);
-  */
-
-  /*
-  const req = https.get(
-    'https://stream.wikimedia.org/v2/stream/recentchange',
-    res => {
-      res.on('data', data => {
-        // console.log(data.toString());
-        send({
-          type: 'change',
-          username: 'paul',
-          page: 'Hallo Welt',
-        });
-      });
-    }
-  );
-  */
-
   return () => {
     // req.end();
   };
@@ -60,7 +26,7 @@ interface AuthResult {
   role: "customer" | "admin";
 }
 
-const auth = makeLiveValue<AuthResult, [AuthContext]>((send) => (ctx) => {
+const auth = makeLiveValue<AuthResult, [AuthContext]>((ctx) => (send) => {
   if (ctx.userId === "bert") {
     send({
       role: "admin",
@@ -72,47 +38,47 @@ const auth = makeLiveValue<AuthResult, [AuthContext]>((send) => (ctx) => {
   }
 });
 
-interface WikipediaUser {
-  username: string;
-}
-
 const bestenliste = makeDerivedValue((ctx: AuthContext) => {
-  const authdata = auth(ctx);
-  if (authdata.role !== "admin") {
-    throw new Error("Unauthorized");
-  }
+  const bestenliste: Record<string, number> = {};
 
-  const wikidata = wiki();
-  const [bestenliste, setBestenliste] = useState<Record<string, number>>({});
-  useEffect(() => {
-    if (wikidata.type === "change") {
-      setBestenliste((old) => ({
-        ...old,
-        [wikidata.username]: (old[wikidata.username] ?? 0) + 1,
-      }));
+  return () => {
+    const authdata = auth(ctx);
+    if (authdata.role !== "admin") {
+      throw new Error("Unauthorized");
     }
-  }, [wikidata, setBestenliste]);
 
-  return bestenliste;
+    const wikidata = wiki();
+    if (wikidata.type === "change") {
+      bestenliste[wikidata.username] =
+        (bestenliste[wikidata.username] ?? 0) + 1;
+    }
+
+    return bestenliste;
+  };
 }, "bestenliste");
 
-const top100 = makeDerivedValue((ctx: AuthContext) => {
-  const v = bestenliste(ctx);
+const top100 = makeDerivedValue(
+  (ctx: AuthContext) => () => {
+    const v = bestenliste(ctx);
 
-  return Object.entries(v)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 100)
-    .map(([username, score]) => ({ username, score }));
-}, "top100");
+    return Object.entries(v)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 100)
+      .map(([username, score]) => ({ username, score }));
+  },
+  "top100"
+);
 
 interface AuthContext {
   userId: string;
 }
 
-const top10 = makeDerivedValue((auth: AuthContext): WikipediaUser[] => {
-  const v = top100(auth);
-  return v.slice(0, 10);
-}, "top10");
+const top10 = makeDerivedValue(
+  (auth: AuthContext) => () => {
+    return top100(auth).slice(0, 10);
+  },
+  "top10"
+);
 
 top10.subscribe(
   [
