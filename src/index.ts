@@ -28,7 +28,7 @@ function withStream(stream: Stream<any>, doIt: () => void) {
   currentlyEvaluatingStream = oldEvaluatingStream;
 }
 
-export function makeDerivedValue<Arguments extends any[], Result>(
+export function makeDerivedValue<Result, Arguments extends any[]>(
   makeDerive: (...args: Arguments) => () => Result
 ): LiveValue<Arguments, Result> {
   const wrapper: LiveValue<Arguments, Result> = (...args) => {
@@ -147,7 +147,7 @@ export function makeLiveValue<T, Arguments extends any[]>(
   };
 
   input.subscribe = (args, onValue) => {
-    makeDerivedValue<Arguments, T>(() => input).subscribe(args, onValue);
+    makeDerivedValue<T, Arguments>(() => input).subscribe(args, onValue);
   };
 
   return input;
