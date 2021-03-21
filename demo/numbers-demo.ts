@@ -3,7 +3,6 @@ import { makeDerivedValue, makeLiveValue } from "../src";
 const input = makeLiveValue<number, []>(() => (send) => {
   setInterval(() => {
     const x: number = Math.random();
-    console.log("new Number: ", x);
     send(x);
   }, 500);
 });
@@ -37,3 +36,4 @@ const difference = makeDerivedValue(() => () => {
 min.subscribe([], (v) => console.log("min", v));
 average.subscribe([], (v) => console.log("avg ", v));
 difference.subscribe([], (v) => console.log("difference: ", v));
+input.subscribe([],(v)=>console.log("input: ", v))

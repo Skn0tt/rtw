@@ -81,7 +81,7 @@ export function makeDerivedValue<Arguments extends any[], Result>(
     streams.push(stream);
     return stream;
   }
-  
+
   wrapper.subscribe = (args, onValue) => {
     const stream = findOrMakeStream(args, makeDerive);
 
@@ -105,7 +105,7 @@ export function makeDerivedValue<Arguments extends any[], Result>(
 
 export function makeLiveValue<T, Arguments extends any[]>(
   connect: (...args: Arguments) => (send: (v: T) => void) => void
-): (...args: Arguments) => T {
+): LiveValue<Arguments, T> {
   let lastValue: T | null = null;
   let hasValue = false;
   let resolve: (() => void) | null = null;
@@ -114,7 +114,7 @@ export function makeLiveValue<T, Arguments extends any[]>(
 
   let isConnected = false;
 
-  return function input(...args: Arguments) {
+  const input: LiveValue<Arguments, T> = (...args: Arguments) => {
     if (!isConnected) {
       connect(...args)((v) => {
         hasValue = true;
@@ -145,4 +145,10 @@ export function makeLiveValue<T, Arguments extends any[]>(
 
     return lastValue!;
   };
+
+  input.subscribe = (args, onValue) => {
+    makeDerivedValue<Arguments, T>(() => input).subscribe(args, onValue);
+  };
+
+  return input;
 }
