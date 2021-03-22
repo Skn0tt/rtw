@@ -6,6 +6,8 @@ test("Only the most current value is passed down", () => {
       send(startFrom);
       send(startFrom + 1);
       send(startFrom + 2);
+
+      return () => {};
     }
   );
 
@@ -23,12 +25,17 @@ test("simple mapping", (done) => {
   const input = makeLiveValue<number, [number]>(
     (startFrom: number) => (send) => {
       send(startFrom);
-      setTimeout(() => {
+      const timer1 = setTimeout(() => {
         send(startFrom + 1);
       }, 1);
-      setTimeout(() => {
+      const timer2 = setTimeout(() => {
         send(startFrom + 2);
       }, 2);
+
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+      };
     }
   );
 
