@@ -8,21 +8,28 @@ interface WikiEvent {
 }
 
 const wiki = makeLiveValue<WikiEvent, []>(() => (send) => {
-  https.get("https://stream.wikimedia.org/v2/stream/recentchange", (res) => {
-    res.on("data", (buf: Buffer) => {
-      const line = buf.toString();
-      if (line.startsWith("data:")) {
-        const json = line.slice("data: ".length);
-        try {
-          if (Math.random() < 0.05) {
-            send(JSON.parse(json));
+  const request = https.get(
+    "https://stream.wikimedia.org/v2/stream/recentchange",
+    (res) => {
+      res.on("data", (buf: Buffer) => {
+        const line = buf.toString();
+        if (line.startsWith("data:")) {
+          const json = line.slice("data: ".length);
+          try {
+            if (Math.random() < 0.05) {
+              send(JSON.parse(json));
+            }
+          } catch (error) {
+            // do nothing
           }
-        } catch (error) {
-          // do nothing
         }
-      }
-    });
-  });
+      });
+    }
+  );
+
+  return () => {
+    request.destroy();
+  };
 });
 
 const mostActiveUsers = makeDerivedValue(() => {
@@ -70,6 +77,10 @@ const botsVsHumans = makeDerivedValue(() => () => {
   return bots / (human + bots);
 });
 
-botsVsHumans.subscribe([], (value) => {
+const sub = botsVsHumans.subscribe([], (value) => {
   console.log(value);
 });
+
+setTimeout(() => {
+  sub.close();
+}, 10000);

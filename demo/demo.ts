@@ -36,6 +36,8 @@ const auth = makeLiveValue<AuthResult, [AuthContext]>((ctx) => (send) => {
       role: "customer",
     });
   }
+
+  return () => {};
 });
 
 const bestenliste = makeDerivedValue((ctx: AuthContext) => {

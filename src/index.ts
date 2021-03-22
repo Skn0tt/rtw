@@ -1,16 +1,21 @@
 export interface LiveValue<Arguments extends any[], Result> {
   (...args: Arguments): Result;
-  subscribe(args: Arguments, onValue: (v: Result) => void): void;
+  subscribe(args: Arguments, onValue: (v: Result) => void): { close(): void };
 }
 
 interface Evaluatable {
   evaluate(): void;
 }
 
-interface Stream<Result> extends Evaluatable {
+interface EvaluatableContainer {
+  children: Set<Evaluatable>;
+  removeChild(child: Evaluatable): void;
+}
+
+interface Stream<Result> extends Evaluatable, EvaluatableContainer {
   hasValue: boolean;
   lastValue: Result;
-  children: Set<Evaluatable>;
+  parents: Set<EvaluatableContainer>;
   derive(): Result;
   args: any[];
 }
@@ -45,7 +50,20 @@ export function makeDerivedValue<Result, Arguments extends any[]>(
     }
 
     const stream: Stream<Result> = {
+      parents: new Set(),
       children: new Set(),
+      removeChild(child) {
+        this.children.delete(child);
+
+        // potentially close this stream
+        if (this.children.size === 0) {
+          this.parents.forEach((parent) => {
+            parent.removeChild(this);
+          });
+
+          streams.splice(streams.indexOf(this), 1);
+        }
+      },
       derive: makeDerive(...(args as any)),
       args,
       evaluate() {
@@ -72,6 +90,7 @@ export function makeDerivedValue<Result, Arguments extends any[]>(
 
     const stream = findOrMakeStream(args);
     stream.children.add(currentlyEvaluatingStream);
+    currentlyEvaluatingStream.parents.add(stream);
 
     if (!stream.hasValue) {
       deriveStream(stream);
@@ -83,28 +102,36 @@ export function makeDerivedValue<Result, Arguments extends any[]>(
   wrapper.subscribe = (args, onValue) => {
     const stream = findOrMakeStream(args);
 
-    stream.children.add({
+    const child = {
       evaluate() {
         onValue(stream.lastValue);
       },
-    });
+    };
+
+    stream.children.add(child);
 
     stream.evaluate();
+
+    return {
+      close() {
+        stream.removeChild(child);
+      },
+    };
   };
 
   return wrapper;
 }
 
-interface LiveValueInstance<Result, Arguments> {
+interface LiveValueInstance<Result, Arguments> extends EvaluatableContainer {
   args: Arguments;
-  children: Set<Evaluatable>;
   lastValue: Result;
   hasValue: boolean;
   resolve?: () => void;
+  close(): void;
 }
 
 export function makeLiveValue<Result, Arguments extends any[]>(
-  connect: (...args: Arguments) => (send: (v: Result) => void) => void
+  connect: (...args: Arguments) => (send: (v: Result) => void) => () => void
 ): LiveValue<Arguments, Result> {
   const instances: LiveValueInstance<Result, Arguments>[] = [];
   function findOrMakeInstance(
@@ -120,9 +147,18 @@ export function makeLiveValue<Result, Arguments extends any[]>(
 
     const instance: LiveValueInstance<Result, Arguments> = {
       children: new Set(),
+      removeChild(child) {
+        this.children.delete(child);
+
+        if (this.children.size === 0) {
+          this.close();
+          instances.splice(instances.indexOf(this), 1);
+        }
+      },
       args,
       hasValue: false,
       lastValue: null as any,
+      close: null as any,
     };
     instances.push(instance);
 
@@ -138,7 +174,7 @@ export function makeLiveValue<Result, Arguments extends any[]>(
       instance.resolve = undefined;
     }
 
-    connect(...args)(send);
+    instance.close = connect(...args)(send);
 
     return instance;
   }
@@ -150,6 +186,7 @@ export function makeLiveValue<Result, Arguments extends any[]>(
 
     const instance = findOrMakeInstance(args);
     instance.children.add(currentlyEvaluatingStream);
+    currentlyEvaluatingStream.parents.add(instance);
 
     if (!instance.hasValue) {
       throw new Promise<void>((_resolve) => {
@@ -162,11 +199,20 @@ export function makeLiveValue<Result, Arguments extends any[]>(
 
   input.subscribe = (args, onValue) => {
     const instance = findOrMakeInstance(args);
-    instance.children.add({
+
+    const child: Evaluatable = {
       evaluate() {
         onValue(instance.lastValue);
       },
-    });
+    };
+
+    instance.children.add(child);
+
+    return {
+      close() {
+        instance.removeChild(child);
+      },
+    };
   };
 
   return input;

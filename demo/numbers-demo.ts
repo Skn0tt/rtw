@@ -1,15 +1,23 @@
 import { makeDerivedValue, makeLiveValue } from "../src";
 
 const input = makeLiveValue<number, []>(() => (send) => {
-  setInterval(() => {
+  const timer = setInterval(() => {
     send(Math.random());
   }, 500);
+
+  return () => {
+    clearInterval(timer);
+  };
 });
 
 const input2 = makeLiveValue<number, []>(() => (send) => {
-  setInterval(() => {
+  const timer = setInterval(() => {
     send(Math.random());
   }, 1000);
+
+  return () => {
+    clearInterval(timer);
+  };
 });
 
 const sum = makeDerivedValue(() => {
@@ -49,6 +57,10 @@ const difference = makeDerivedValue(() => () => {
 // min.subscribe([], (v) => console.log("min", v));
 // average.subscribe([], (v) => console.log("avg ", v));
 // difference.subscribe([], (v) => console.log("difference: ", v));
-input.subscribe([], (v) => console.log("input: ", v));
-input2.subscribe([], (v) => console.log("input2: ", v));
-sum.subscribe([], (v) => console.log("sum: ", v));
+// input.subscribe([], (v) => console.log("input: ", v));
+// input2.subscribe([], (v) => console.log("input2: ", v));
+const sumSubscription = sum.subscribe([], (v) => console.log("sum: ", v));
+
+setTimeout(() => {
+  sumSubscription.close();
+}, 5000);
