@@ -16,7 +16,7 @@ const wiki = makeLiveValue<WikiEvent, []>(() => (send) => {
         if (line.startsWith("data:")) {
           const json = line.slice("data: ".length);
           try {
-            if (Math.random() < 0.05) {
+            if (Math.random() < 0.5) {
               send(JSON.parse(json));
             }
           } catch (error) {
@@ -41,41 +41,67 @@ const mostActiveUsers = makeDerivedValue(() => {
   };
 });
 
-const top10ActiveUsers = makeDerivedValue(() => () => {
-  return Object.entries(mostActiveUsers())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([username]) => username);
-});
+function arrShallowEqual(a: any[], b: any[]): boolean {
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
 
-const numberOfBotEdits = makeDerivedValue(() => {
-  let count = 0;
-  return () => {
-    const action = wiki();
-    if (action.bot) {
-      count++;
-    }
-    return count;
-  };
-});
+const top10ActiveUsers = makeDerivedValue(
+  () => () => {
+    return Object.entries(mostActiveUsers())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([username]) => username);
+  },
+  {
+    propagate(a, b) {
+      return !arrShallowEqual(a, b);
+    },
+  }
+);
 
-const numberOfHumanEdits = makeDerivedValue(() => {
-  let count = 0;
-  return () => {
-    const action = wiki();
-    if (!action.bot) {
-      count++;
-    }
-    return count;
-  };
-});
+const numberOfBotEdits = makeDerivedValue(
+  () => {
+    let count = 0;
+    return () => {
+      const action = wiki();
+      if (action.bot) {
+        count++;
+      }
+      return count;
+    };
+  },
+  {
+    propagate: (a, b) => a !== b,
+  }
+);
 
-const botsVsHumans = makeDerivedValue(() => () => {
-  const human = numberOfHumanEdits();
-  const bots = numberOfBotEdits();
+const numberOfHumanEdits = makeDerivedValue(
+  () => {
+    let count = 0;
+    return () => {
+      const action = wiki();
+      if (!action.bot) {
+        count++;
+      }
+      return count;
+    };
+  },
+  {
+    propagate: (a, b) => a !== b,
+  }
+);
 
-  return bots / (human + bots);
-});
+const botsVsHumans = makeDerivedValue(
+  () => () => {
+    const human = numberOfHumanEdits();
+    const bots = numberOfBotEdits();
+
+    return bots / (human + bots);
+  },
+  {
+    propagate: (a, b) => a !== b,
+  }
+);
 
 const sub = botsVsHumans.subscribe([], (value) => {
   console.log(value);

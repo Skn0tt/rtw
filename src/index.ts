@@ -36,8 +36,13 @@ function deriveStream(stream: Stream<any>) {
   currentlyEvaluatingStream = oldEvaluatingStream;
 }
 
+interface DerivedValueOptions<Result> {
+  propagate?(oldValue: Result, newValue: Result): boolean;
+}
+
 export function makeDerivedValue<Result, Arguments extends any[]>(
-  makeDerive: (...args: Arguments) => () => Result
+  makeDerive: (...args: Arguments) => () => Result,
+  options?: DerivedValueOptions<Result>
 ): LiveValue<Arguments, Result> {
   const streams: Stream<Result>[] = [];
   function findOrMakeStream(args: Stream<any>["args"]): Stream<Result> {
@@ -67,8 +72,18 @@ export function makeDerivedValue<Result, Arguments extends any[]>(
       args,
       evaluate() {
         try {
+          const oldValue = stream.lastValue;
+          const isFirstValue = !stream.hasValue;
           deriveStream(stream);
-          stream.children.forEach((dependent) => dependent.evaluate());
+
+          let shouldPropagate = true;
+          if (!isFirstValue && options?.propagate) {
+            shouldPropagate = options.propagate(oldValue, stream.lastValue);
+          }
+
+          if (shouldPropagate) {
+            stream.children.forEach((dependent) => dependent.evaluate());
+          }
         } catch (error) {
           if (!error.then) {
             throw error;
