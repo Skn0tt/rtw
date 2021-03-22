@@ -10,7 +10,7 @@ interface Evaluatable {
 interface Stream<Result> extends Evaluatable {
   hasValue: boolean;
   lastValue: Result;
-  dependents: Set<Evaluatable>;
+  children: Set<Evaluatable>;
   derive(): Result;
   args: any[];
 }
@@ -45,13 +45,13 @@ export function makeDerivedValue<Result, Arguments extends any[]>(
     }
 
     const stream: Stream<Result> = {
-      dependents: new Set(),
+      children: new Set(),
       derive: makeDerive(...(args as any)),
       args,
       evaluate() {
         try {
           deriveStream(stream);
-          stream.dependents.forEach((dependent) => dependent.evaluate());
+          stream.children.forEach((dependent) => dependent.evaluate());
         } catch (error) {
           if (!error.then) {
             throw error;
@@ -71,7 +71,7 @@ export function makeDerivedValue<Result, Arguments extends any[]>(
     }
 
     const stream = findOrMakeStream(args);
-    stream.dependents.add(currentlyEvaluatingStream);
+    stream.children.add(currentlyEvaluatingStream);
 
     if (!stream.hasValue) {
       deriveStream(stream);
@@ -83,7 +83,7 @@ export function makeDerivedValue<Result, Arguments extends any[]>(
   wrapper.subscribe = (args, onValue) => {
     const stream = findOrMakeStream(args);
 
-    stream.dependents.add({
+    stream.children.add({
       evaluate() {
         onValue(stream.lastValue);
       },
@@ -97,7 +97,7 @@ export function makeDerivedValue<Result, Arguments extends any[]>(
 
 interface LiveValueInstance<Result, Arguments> {
   args: Arguments;
-  dependents: Set<Evaluatable>;
+  children: Set<Evaluatable>;
   lastValue: Result;
   hasValue: boolean;
   resolve?: () => void;
@@ -119,7 +119,7 @@ export function makeLiveValue<Result, Arguments extends any[]>(
     }
 
     const instance: LiveValueInstance<Result, Arguments> = {
-      dependents: new Set(),
+      children: new Set(),
       args,
       hasValue: false,
       lastValue: null as any,
@@ -130,7 +130,7 @@ export function makeLiveValue<Result, Arguments extends any[]>(
       instance.hasValue = true;
       instance.lastValue = value;
 
-      instance.dependents.forEach((dependent) => {
+      instance.children.forEach((dependent) => {
         dependent.evaluate();
       });
 
@@ -149,7 +149,7 @@ export function makeLiveValue<Result, Arguments extends any[]>(
     }
 
     const instance = findOrMakeInstance(args);
-    instance.dependents.add(currentlyEvaluatingStream);
+    instance.children.add(currentlyEvaluatingStream);
 
     if (!instance.hasValue) {
       throw new Promise<void>((_resolve) => {
@@ -162,7 +162,7 @@ export function makeLiveValue<Result, Arguments extends any[]>(
 
   input.subscribe = (args, onValue) => {
     const instance = findOrMakeInstance(args);
-    instance.dependents.add({
+    instance.children.add({
       evaluate() {
         onValue(instance.lastValue);
       },
