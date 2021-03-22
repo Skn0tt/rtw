@@ -83,3 +83,140 @@ test("simple mapping", (done) => {
     done();
   }, 5);
 });
+
+test("alternating inputs", (done) => {
+  const events: string[] = [];
+
+  const inputA = makeLiveValue<string, []>(() => (send) => {
+    setTimeout(() => {
+      send("1 - a");
+    }, 1);
+
+    setTimeout(() => {
+      send("3 - a");
+    }, 3);
+
+    return () => {
+      events.push("cleanup - a");
+    };
+  });
+
+  const inputB = makeLiveValue<string, []>(() => (send) => {
+    setTimeout(() => {
+      send("2 - b");
+    }, 2);
+
+    setTimeout(() => {
+      send("4 - b");
+    }, 4);
+
+    return () => {
+      events.push("cleanup - b");
+    };
+  });
+
+  const alternating = makeDerivedValue(() => {
+    let useA = true;
+    return () => {
+      if (useA) {
+        useA = false;
+        return inputA();
+      } else {
+        useA = true;
+        return inputB();
+      }
+    };
+  });
+
+  const subscription = alternating.subscribe([], (v) => events.push(v));
+
+  setTimeout(() => {
+    subscription.close();
+
+    expect(events).toEqual([
+      // first derive: useA is flipped, inputA suspends, alternating is now child of inputA
+      // inputA sends: useA is flipped, inputB suspends, alternating is now child of inputA and inputB
+      // inputB sends: useA is flipped, inputA returns "3 - a"
+      "3 - a",
+      // inputA sends: useA is flipped, inputB returns "2 - b"
+      "2 - b",
+      // inputB sends: useA is flipped, inputA returns "3 - a"
+      "3 - a",
+      // cleanup is called
+      "cleanup - a",
+      "cleanup - b",
+    ]);
+
+    done();
+  }, 10);
+});
+
+test("get the most recent of two inputs", (done) => {
+  const events: string[] = [];
+
+  const inputA = makeLiveValue<string, []>(() => (send) => {
+    setTimeout(() => {
+      send("1 - a");
+    }, 1);
+
+    setTimeout(() => {
+      send("3 - a");
+    }, 3);
+
+    return () => {
+      events.push("cleanup - a");
+    };
+  });
+
+  const inputB = makeLiveValue<string, []>(() => (send) => {
+    setTimeout(() => {
+      send("2 - b");
+    }, 2);
+
+    setTimeout(() => {
+      send("4 - b");
+    }, 4);
+
+    return () => {
+      events.push("cleanup - b");
+    };
+  });
+
+  const mostRecent = makeDerivedValue(() => {
+    let lastA: string | null = null;
+    let lastB: string | null = null;
+    return () => {
+      const a = inputA();
+      const b = inputB();
+
+      if (lastA !== a) {
+        lastA = a;
+        return a;
+      }
+
+      if (lastB !== b) {
+        lastB = b;
+        return b;
+      }
+
+      return a;
+    };
+  });
+
+  const subscription = mostRecent.subscribe([], (v) => events.push(v));
+
+  setTimeout(() => {
+    subscription.close();
+
+    expect(events).toEqual([
+      "1 - a",
+      "2 - b",
+      "3 - a",
+      "4 - b",
+      "cleanup - a",
+      "cleanup - b",
+    ]);
+
+    done();
+  }, 10);
+});
