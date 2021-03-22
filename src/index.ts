@@ -3,15 +3,15 @@ export interface LiveValue<Arguments extends any[], Result> {
   subscribe(args: Arguments, onValue: (v: Result) => void): void;
 }
 
-interface Notifiable {
-  notify(): void;
+interface Evaluatable {
+  evaluate(): void;
 }
 
-interface Stream<Result> extends Notifiable {
+interface Stream<Result> extends Evaluatable {
   hasValue: boolean;
   lastValue: Result;
-  dependents: Set<Notifiable>;
-  derive: Function;
+  dependents: Set<Evaluatable>;
+  derive(): Result;
   args: any[];
 }
 
@@ -21,10 +21,13 @@ function arrShallowEqual(a: any[], b: any[]) {
 
 let currentlyEvaluatingStream: Stream<any> | null = null;
 
-function withStream(stream: Stream<any>, doIt: () => void) {
+function deriveStream(stream: Stream<any>) {
   const oldEvaluatingStream = currentlyEvaluatingStream;
   currentlyEvaluatingStream = stream;
-  doIt();
+
+  stream.lastValue = stream.derive();
+  stream.hasValue = true;
+
   currentlyEvaluatingStream = oldEvaluatingStream;
 }
 
@@ -32,10 +35,7 @@ export function makeDerivedValue<Result, Arguments extends any[]>(
   makeDerive: (...args: Arguments) => () => Result
 ): LiveValue<Arguments, Result> {
   const streams: Stream<Result>[] = [];
-  function findOrMakeStream(
-    args: Stream<any>["args"],
-    makeDerive: (...args: Arguments) => () => Result
-  ): Stream<Result> {
+  function findOrMakeStream(args: Stream<any>["args"]): Stream<Result> {
     const foundStream = streams.find((s) => {
       return arrShallowEqual(args, s.args);
     });
@@ -48,13 +48,15 @@ export function makeDerivedValue<Result, Arguments extends any[]>(
       dependents: new Set(),
       derive: makeDerive(...(args as any)),
       args,
-      notify() {
-        withStream(stream, () => {
-          stream.lastValue = stream.derive();
-          stream.hasValue = true;
-        });
-
-        stream.dependents.forEach((dependent) => dependent.notify());
+      evaluate() {
+        try {
+          deriveStream(stream);
+          stream.dependents.forEach((dependent) => dependent.evaluate());
+        } catch (error) {
+          if (!error.then) {
+            throw error;
+          }
+        }
       },
       hasValue: false,
       lastValue: null as any,
@@ -64,90 +66,107 @@ export function makeDerivedValue<Result, Arguments extends any[]>(
   }
 
   const wrapper: LiveValue<Arguments, Result> = (...args) => {
-    const stream = findOrMakeStream(args, makeDerive);
-
-    if (currentlyEvaluatingStream) {
-      stream.dependents.add(currentlyEvaluatingStream);
-    } else {
+    if (!currentlyEvaluatingStream) {
       throw new Error("halp");
     }
 
+    const stream = findOrMakeStream(args);
+    stream.dependents.add(currentlyEvaluatingStream);
+
     if (!stream.hasValue) {
-      withStream(stream, () => {
-        stream.lastValue = stream.derive();
-        stream.hasValue = true;
-      });
+      deriveStream(stream);
     }
 
     return stream.lastValue;
   };
 
   wrapper.subscribe = (args, onValue) => {
-    const stream = findOrMakeStream(args, makeDerive);
+    const stream = findOrMakeStream(args);
 
     stream.dependents.add({
-      notify() {
+      evaluate() {
         onValue(stream.lastValue);
       },
     });
 
-    try {
-      stream.notify();
-    } catch (error) {
-      if (!error.then) {
-        throw error;
-      }
-    }
+    stream.evaluate();
   };
 
   return wrapper;
 }
 
-export function makeLiveValue<T, Arguments extends any[]>(
-  connect: (...args: Arguments) => (send: (v: T) => void) => void
-): LiveValue<Arguments, T> {
-  let lastValue: T | null = null;
-  let hasValue = false;
-  let resolve: (() => void) | null = null;
+interface LiveValueInstance<Result, Arguments> {
+  args: Arguments;
+  dependents: Set<Evaluatable>;
+  lastValue: Result;
+  hasValue: boolean;
+  resolve?: () => void;
+}
 
-  let dependents = new Set<Stream<any>>();
+export function makeLiveValue<Result, Arguments extends any[]>(
+  connect: (...args: Arguments) => (send: (v: Result) => void) => void
+): LiveValue<Arguments, Result> {
+  const instances: LiveValueInstance<Result, Arguments>[] = [];
+  function findOrMakeInstance(
+    args: Arguments
+  ): LiveValueInstance<Result, Arguments> {
+    const found = instances.find((i) => {
+      return arrShallowEqual(args, i.args);
+    });
 
-  let isConnected = false;
-
-  const input: LiveValue<Arguments, T> = (...args: Arguments) => {
-    if (!isConnected) {
-      connect(...args)((v) => {
-        hasValue = true;
-        lastValue = v;
-
-        dependents.forEach((dependent) => {
-          dependent.notify();
-        });
-
-        resolve?.();
-        resolve = null;
-      });
-
-      isConnected = true;
+    if (found) {
+      return found;
     }
 
-    if (currentlyEvaluatingStream) {
-      dependents.add(currentlyEvaluatingStream);
-    } else {
+    const instance: LiveValueInstance<Result, Arguments> = {
+      dependents: new Set(),
+      args,
+      hasValue: false,
+      lastValue: null as any,
+    };
+    instances.push(instance);
+
+    function send(value: Result) {
+      instance.hasValue = true;
+      instance.lastValue = value;
+
+      instance.dependents.forEach((dependent) => {
+        dependent.evaluate();
+      });
+
+      instance.resolve?.();
+      instance.resolve = undefined;
+    }
+
+    connect(...args)(send);
+
+    return instance;
+  }
+
+  const input: LiveValue<Arguments, Result> = (...args) => {
+    if (!currentlyEvaluatingStream) {
       throw new Error("halp");
     }
 
-    if (!hasValue) {
+    const instance = findOrMakeInstance(args);
+    instance.dependents.add(currentlyEvaluatingStream);
+
+    if (!instance.hasValue) {
       throw new Promise<void>((_resolve) => {
-        resolve = _resolve;
+        instance.resolve = _resolve;
       });
     }
 
-    return lastValue!;
+    return instance.lastValue;
   };
 
   input.subscribe = (args, onValue) => {
-    makeDerivedValue<T, Arguments>(() => input).subscribe(args, onValue);
+    const instance = findOrMakeInstance(args);
+    instance.dependents.add({
+      evaluate() {
+        onValue(instance.lastValue);
+      },
+    });
   };
 
   return input;

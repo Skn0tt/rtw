@@ -2,15 +2,13 @@ import { makeDerivedValue, makeLiveValue } from "../src";
 
 const input = makeLiveValue<number, []>(() => (send) => {
   setInterval(() => {
-    const x: number = Math.random();
-    send(x);
+    send(Math.random());
   }, 500);
 });
 
 const input2 = makeLiveValue<number, []>(() => (send) => {
   setInterval(() => {
-    const x: number = Math.random();
-    send(x);
+    send(Math.random());
   }, 1000);
 });
 
