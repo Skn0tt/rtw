@@ -34,6 +34,7 @@
     }
   ],
   "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
   "scripts": {
     "build": "rimraf dist && tsc",
     "prepack": "npm run build",
