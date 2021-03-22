@@ -31,25 +31,6 @@ function withStream(stream: Stream<any>, doIt: () => void) {
 export function makeDerivedValue<Result, Arguments extends any[]>(
   makeDerive: (...args: Arguments) => () => Result
 ): LiveValue<Arguments, Result> {
-  const wrapper: LiveValue<Arguments, Result> = (...args) => {
-    const stream = findOrMakeStream(args, makeDerive);
-
-    if (currentlyEvaluatingStream) {
-      stream.dependents.add(currentlyEvaluatingStream);
-    } else {
-      throw new Error("halp");
-    }
-
-    if (!stream.hasValue) {
-      withStream(stream, () => {
-        stream.lastValue = stream.derive();
-        stream.hasValue = true;
-      });
-    }
-
-    return stream.lastValue;
-  };
-
   const streams: Stream<Result>[] = [];
   function findOrMakeStream(
     args: Stream<any>["args"],
@@ -81,6 +62,25 @@ export function makeDerivedValue<Result, Arguments extends any[]>(
     streams.push(stream);
     return stream;
   }
+
+  const wrapper: LiveValue<Arguments, Result> = (...args) => {
+    const stream = findOrMakeStream(args, makeDerive);
+
+    if (currentlyEvaluatingStream) {
+      stream.dependents.add(currentlyEvaluatingStream);
+    } else {
+      throw new Error("halp");
+    }
+
+    if (!stream.hasValue) {
+      withStream(stream, () => {
+        stream.lastValue = stream.derive();
+        stream.hasValue = true;
+      });
+    }
+
+    return stream.lastValue;
+  };
 
   wrapper.subscribe = (args, onValue) => {
     const stream = findOrMakeStream(args, makeDerive);
