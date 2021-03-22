@@ -55,7 +55,6 @@ export function makeDerivedValue<Result, Arguments extends any[]>(
       removeChild(child) {
         this.children.delete(child);
 
-        // potentially close this stream
         if (this.children.size === 0) {
           this.parents.forEach((parent) => {
             parent.removeChild(this);
